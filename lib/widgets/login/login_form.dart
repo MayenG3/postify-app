@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
-import '../services/login_service.dart';
-import '../screens/home_screen.dart';
-import '../screens/signup_screen.dart';
-import '../widgets/input_fields.dart';
-import '../utils/validators.dart';
+import '../../services/login_service.dart';
+import '../../screens/home_screen.dart';
+import '../../screens/signup_screen.dart';
+import 'input_fields.dart';
+import '../../utils/validators.dart';
+import '../../utils/snackbar_service.dart';
 
 class LoginForm extends StatefulWidget {
   const LoginForm({super.key});
@@ -28,17 +29,6 @@ class _LoginFormState extends State<LoginForm> {
     super.dispose();
   }
 
-  void _showSnackBar(String message, {bool isError = true}) {
-    final snackBar = SnackBar(
-      content: Text(message),
-      backgroundColor: isError ? Colors.redAccent : Colors.green,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-    );
-    ScaffoldMessenger.of(context).showSnackBar(snackBar);
-  }
-
   void _login(BuildContext context) async {
     if (_formKey.currentState!.validate()) {
       final client = GraphQLProvider.of(context).value;
@@ -55,29 +45,51 @@ class _LoginFormState extends State<LoginForm> {
         );
 
         if (result.hasException) {
-          _showSnackBar("Corrreo o contraseña incorrectos.");
+          if (mounted) {
+            SnackbarService.showError(
+              // ignore: use_build_context_synchronously
+              context: context,
+              message: "Correo o contraseña incorrectos.",
+            );
+          }
           setState(() => _isLoading = false);
           return;
         }
 
         final data = result.data?['login'];
         if (data != null && data['access_token'] != null && mounted) {
-          _showSnackBar("Inicio de sesión exitoso", isError: false);
+          SnackbarService.showSuccess(
+            // ignore: use_build_context_synchronously
+            context: context,
+            message: "Inicio de sesión exitoso",
+          );
           Navigator.pushReplacement(
+            // ignore: use_build_context_synchronously
             context,
             MaterialPageRoute(
-              builder:
-                  (_) => HomeScreen(
-                    user: data['user'],
-                    token: data['access_token'],
-                  ),
+              builder: (_) => HomeScreen(
+                user: data['user'],
+                token: data['access_token'],
+              ),
             ),
           );
         } else {
-          _showSnackBar("Correo o contraseña incorrectos.");
+          if (mounted) {
+            SnackbarService.showError(
+              // ignore: use_build_context_synchronously
+              context: context,
+              message: "Correo o contraseña incorrectos.",
+            );
+          }
         }
       } catch (e) {
-        _showSnackBar("Error al iniciar sesión");
+        if (mounted) {
+          SnackbarService.showError(
+            // ignore: use_build_context_synchronously
+            context: context,
+            message: "Error al iniciar sesión: ${e.toString()}",
+          );
+        }
       } finally {
         if (mounted) {
           setState(() => _isLoading = false);

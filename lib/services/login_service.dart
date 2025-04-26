@@ -15,6 +15,7 @@ class ApiService {
             name
             lastname
             username
+            profile_pic
             email
           }
         }

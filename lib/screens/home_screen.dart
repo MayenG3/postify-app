@@ -1,81 +1,107 @@
 import 'package:flutter/material.dart';
-import './login_screen.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
+import 'package:provider/provider.dart';
+import '../controllers/home_controller.dart';
+import '../services/comment_service.dart';
+import '../services/post_service.dart';
+import '../widgets/posts/post_card.dart';
+import '../widgets/home/home_app_bar.dart';
+import '../widgets/home/home_bottom_bar.dart';
+import '../widgets/posts/create_post_dialog.dart';
+import '../widgets/posts/create_post_card.dart';
+import '../widgets/home/scroll_to_top_button.dart';
 
-class HomeScreen extends StatelessWidget {
-  final Map<String, dynamic> user;
+class HomeScreen extends StatefulWidget {
   final String token;
+  final Map<String, dynamic> user;
 
-  const HomeScreen({super.key, required this.user, required this.token});
+  const HomeScreen({super.key, required this.token, required this.user});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  late HomeController _controller;
+  int _currentIndex = 0;
+  late ScrollController _scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final client = GraphQLProvider.of(context).value;
+    _controller = HomeController(
+      context: context,
+      user: widget.user,
+      postService: PostService(client: client),
+      commentService: CommentService(client: client),
+    );
+    _controller.loadPosts();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFFE8F0FE), Color(0xFFE0E7FF)],
-          ),
-        ),
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+    return ChangeNotifierProvider.value(
+      value: _controller,
+      child: Scaffold(
+        backgroundColor: Colors.grey[100],
+        appBar: const HomeAppBar(),
+        body: Consumer<HomeController>(
+          builder: (context, controller, _) {
+            return Stack(
               children: [
-                Text(
-                  'Welcome, ${user['name']}!',
-                  style: const TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1E40AF),
-                  ),
+                RefreshIndicator(
+                  onRefresh: controller.loadPosts,
+                  child:
+                      controller.isLoading
+                          ? const Center(child: CircularProgressIndicator())
+                          : ListView.builder(
+                            controller: _scrollController,
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            itemCount: controller.posts.length + 1,
+                            itemBuilder: (context, index) {
+                              if (index == 0) {
+                                return CreatePostCard(
+                                  controller: controller,
+                                  profilePic: widget.user['profile_pic'],
+                                );
+                              }
+                              return PostCard(
+                                post: controller.posts[index - 1],
+                                currentUser: widget.user,
+                                commentController: controller.commentController,
+                                onCommentSubmitted: (comment) {
+                                  controller.createComment(
+                                    controller.posts[index - 1].id,
+                                  );
+                                },
+                              );
+                            },
+                          ),
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  'Email: ${user['email']}',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    color: Color(0xFF6B7280),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Token:\n$token',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Color(0xFF374151),
-                  ),
-                ),
-                const SizedBox(height: 32),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                        builder: (context) => const LoginScreen(),
-                      ),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1E40AF),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 32,
-                      vertical: 16,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'Logout',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                ),
+                ScrollToTopButton(scrollController: _scrollController),
               ],
-            ),
-          ),
+            );
+          },
+        ),
+        bottomNavigationBar: HomeBottomBar(
+          currentIndex: _currentIndex,
+          onIndexChanged: (index) => setState(() => _currentIndex = index),
+          onCreatePost: () => CreatePostDialog.show(context, _controller),
+          user: widget.user,
         ),
       ),
     );

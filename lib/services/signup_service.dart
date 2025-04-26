@@ -11,6 +11,7 @@ class SignupService {
     required String username,
     required String email,
     required String password,
+    required String profilePic,
   }) async {
     const String signupMutation = """
       mutation CreateUser(\$createUserInput: CreateUserInput!) {
@@ -21,6 +22,7 @@ class SignupService {
           password
           name
           lastname
+          profile_pic
         }
       }
     """;
@@ -34,6 +36,7 @@ class SignupService {
           'username': username,
           'email': email,
           'password': password,
+          'profile_pic': profilePic,
         },
       },
     );

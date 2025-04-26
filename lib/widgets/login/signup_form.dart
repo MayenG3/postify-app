@@ -1,9 +1,13 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
-import '../screens/login_screen.dart';
-import '../services/signup_service.dart';
-import '../widgets/input_fields.dart';
-import '../utils/validators.dart';
+import '../../services/signup_service.dart';
+import '../../services/login_service.dart';
+import '../../screens/home_screen.dart';
+import 'input_fields.dart';
+import '../../utils/validators.dart';
+import '../../utils/snackbar_service.dart'; 
 
 class SignupForm extends StatefulWidget {
   const SignupForm({super.key});
@@ -34,6 +38,12 @@ class _SignupFormState extends State<SignupForm> {
     super.dispose();
   }
 
+  String _generateRandomProfilePicUrl() {
+    final random = Random();
+    final randomNumber = random.nextInt(70) + 1; 
+    return 'https://i.pravatar.cc/150?img=$randomNumber';
+  }
+
   void _onSubmit() async {
     if (_formKey.currentState!.validate()) {
       setState(() {
@@ -43,34 +53,84 @@ class _SignupFormState extends State<SignupForm> {
 
       final client = GraphQLProvider.of(context).value;
       final signupService = SignupService(client: client);
+      final apiService = ApiService(client: client);
 
       try {
-        final result = await signupService.registerUser(
+        final profilePicUrl = _generateRandomProfilePicUrl();
+        final signupResult = await signupService.registerUser(
           name: _nameController.text.trim(),
           lastname: _lastnameController.text.trim(),
           username: _usernameController.text.trim(),
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
+          profilePic: profilePicUrl,
         );
 
-        if (result.hasException) {
+        if (signupResult.hasException) {
+          if (mounted) {
+            SnackbarService.showError(
+              context: context,
+              message: "Error al registrarse. Intente nuevamente.",
+            );
+          }
           setState(() {
-            _errorMessage = result.exception.toString();
             _isLoading = false;
           });
           return;
         }
 
-        if (mounted) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const LoginScreen()),
+        final loginResult = await apiService.login(
+          _emailController.text.trim(),
+          _passwordController.text.trim(),
+        );
+
+        if (loginResult.hasException) {
+          if (mounted) {
+            SnackbarService.showError(
+              context: context,
+              message: "Registro exitoso, pero no se pudo iniciar sesión automáticamente.",
+            );
+          }
+          setState(() {
+            _isLoading = false;
+          });
+          return;
+        }
+
+        final data = loginResult.data?['login'];
+        if (data != null && data['access_token'] != null && mounted) {
+          SnackbarService.showSuccess(
+            context: context,
+            message: "Registro y inicio de sesión exitoso",
           );
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => HomeScreen(
+                user: data['user'],
+                token: data['access_token'],
+              ),
+            ),
+          );
+        } else {
+          if (mounted) {
+            SnackbarService.showError(
+              context: context,
+              message: "Registro exitoso, pero no se pudo iniciar sesión automáticamente.",
+            );
+          }
         }
       } catch (e) {
-        setState(() {
-          _errorMessage = e.toString();
-          _isLoading = false;
-        });
+        if (mounted) {
+          SnackbarService.showError(
+            context: context,
+            message: "Error durante el registro: ${e.toString()}",
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
       }
     }
   }
